@@ -1,0 +1,279 @@
+---
+title: "Analyse de survie - Kaplan-Meier et Modèle de Cox avec mlr3proba"
+subtitle: "Dataset Veterans Lung Cancer"
+author: "Analyse de survie"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+    theme: cosmo
+    fig-width: 10
+    fig-height: 6
+---
+
+## Introduction
+
+Ce notebook présente l'estimation de la courbe de survie de Kaplan-Meier en utilisant le package `mlr3proba` en R. Nous utilisons le même dataset que dans le notebook Python (`veterans_lung_cancer`).
+
+## Installation des packages
+
+```{r}
+#| eval: false
+# Installer les packages si nécessaire:
+# install.packages(c("survival", "mlr3", "mlr3proba", "ggplot2", "gridExtra", "glmnet"))
+```
+
+## Chargement des bibliothèques
+
+```{r}
+library(survival)
+library(mlr3)
+library(mlr3proba)
+library(ggplot2)
+library(gridExtra)
+```
+
+## Chargement des données
+
+Le dataset `veteran` est disponible dans le package `survival` et contient des données sur le cancer du poumon chez les vétérans.
+
+```{r}
+# Charger le dataset veterans_lung_cancer
+# Utilisation de survival::veteran pour éviter l'avertissement
+veteran <- survival::veteran
+```
+
+## Exploration des données
+
+### Structure du dataset
+
+```{r}
+# Afficher la structure et les premières lignes
+str(veteran)
+head(veteran)
+```
+
+### Statistiques descriptives
+
+```{r}
+cat("Nombre total de patients:", length(veteran$time), "\n")
+cat("Événements observés (décès):", sum(veteran$status == 1), "\n")
+cat("Censures:", sum(veteran$status == 0), "\n")
+```
+
+Le dataset `veteran` contient:
+- **time**: temps de survie en jours
+- **status**: statut (1 = décès, 0 = censure)
+- **autres variables**: trt, celltype, prior, karno, diagtime, age, etc.
+
+## Estimation de Kaplan-Meier avec mlr3proba
+
+### Création de la tâche de survie
+
+```{r}
+# Créer une tâche de survie avec mlr3proba
+# Note: mlr3proba attend que l'événement soit TRUE/FALSE ou 1/0
+# Le dataset veteran utilise status = 1 pour décès, ce qui est compatible
+task_km <- TaskSurv$new(
+  id = "veteran_km", 
+  backend = veteran, 
+  time = "time", 
+  event = "status"
+)
+
+# Afficher les informations sur la tâche
+print(task_km)
+```
+
+### Entraînement du modèle Kaplan-Meier
+
+```{r}
+# Créer et entraîner l'estimateur de Kaplan-Meier
+kaplan <- lrn("surv.kaplan")
+kaplan$train(task_km)
+
+# Obtenir les prédictions
+pred <- kaplan$predict(task_km)
+```
+
+### Extraction des données de survie
+
+```{r}
+# Extraire la distribution de survie
+# mlr3proba stocke les prédictions dans un objet de distribution
+surv_dist <- pred$distr
+
+# Obtenir les temps uniques depuis les données
+times_unique <- sort(unique(veteran$time))
+
+# Calculer la probabilité de survie pour chaque temps
+# Pour surv.kaplan, on peut utiliser la méthode survival() de la distribution
+# Prendre la première valeur (toutes identiques pour KM)
+surv_probs <- sapply(times_unique, function(t) {
+  surv_dist$survival(t)[1]
+})
+
+# Créer un dataframe pour le tracé
+df_km <- data.frame(
+  time = times_unique,
+  surv = surv_probs
+)
+```
+
+## Visualisation de la courbe de Kaplan-Meier
+
+```{r}
+#| fig-cap: "Courbe de Kaplan-Meier pour le dataset Veterans Lung Cancer"
+# Tracer la courbe de Kaplan-Meier avec ggplot2
+p <- ggplot(df_km, aes(x = time, y = surv)) +
+  geom_step(color = "darkred", linewidth = 1.2) +
+  geom_ribbon(aes(ymin = 0, ymax = surv), alpha = 0.3, fill = "lightcoral") +
+  labs(
+    title = "Courbe de Kaplan-Meier - Dataset Veterans Lung Cancer (mlr3proba)",
+    x = "Temps (jours)",
+    y = "Probabilité de survie"
+  ) +
+  theme_bw() +
+  theme(plot.title = element_text(face = "bold", size = 14)) +
+  scale_y_continuous(limits = c(0, 1))
+
+print(p)
+```
+
+# Modèle de Cox (Cox Proportional Hazards)
+
+Le modèle de Cox permet d'analyser l'effet de plusieurs variables explicatives sur le temps de survie, en supposant que les risques sont proportionnels.
+
+### Création de la tâche avec covariables
+
+```{r}
+# Créer une tâche de survie avec les covariables pour le modèle de Cox
+# On inclut les variables explicatives: trt, celltype, prior, karno, diagtime, age
+task_cox <- TaskSurv$new(
+  id = "veteran_cox", 
+  backend = veteran, 
+  time = "time", 
+  event = "status"
+)
+
+# Afficher les informations sur la tâche
+print(task_cox)
+```
+
+### Entraînement du modèle de Cox
+
+```{r}
+# Créer et entraîner le modèle de Cox
+cox_model <- lrn("surv.coxph")
+cox_model$train(task_cox)
+
+# Obtenir les prédictions
+pred_cox <- cox_model$predict(task_cox)
+
+# Afficher un résumé du modèle
+print(cox_model$model)
+```
+
+### Extraction des coefficients
+
+```{r}
+# Extraire les coefficients du modèle de Cox
+cox_summary <- summary(cox_model$model)
+cox_coef <- cox_summary$coefficients
+
+# Créer un dataframe pour visualiser les coefficients
+df_coef <- data.frame(
+  variable = rownames(cox_coef),
+  coef = cox_coef[, "coef"],
+  exp_coef = exp(cox_coef[, "coef"]),
+  p_value = cox_coef[, "Pr(>|z|)"]
+)
+
+# Afficher les coefficients
+print(df_coef)
+```
+
+### Visualisation des coefficients
+
+```{r}
+#| fig-cap: "Coefficients du modèle de Cox - Hazard Ratios"
+# Tracer les coefficients (Hazard Ratios)
+p_coef <- ggplot(df_coef, aes(x = reorder(variable, exp_coef), y = exp_coef)) +
+  geom_col(fill = "steelblue", alpha = 0.7) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "red", linewidth = 1) +
+  coord_flip() +
+  labs(
+    title = "Hazard Ratios du modèle de Cox",
+    subtitle = "HR > 1 = risque accru (ex: HR=1.5 = +50% de risque) | HR < 1 = risque réduit (ex: HR=0.7 = -30% de risque) | HR=1 = pas d'effet",
+    x = "Variable",
+    y = "Hazard Ratio (exp(coef))"
+  ) +
+  theme_bw() +
+  theme(plot.title = element_text(face = "bold", size = 14))
+
+print(p_coef)
+```
+
+### Courbe de survie continue du modèle de Cox
+
+```{r}
+#| fig-cap: "Courbe de survie continue du modèle de Cox (baseline survival function)"
+# Extraire le modèle de Cox depuis mlr3proba
+cox_fit <- cox_model$model
+
+# Obtenir la fonction de survie de base (baseline survival function)
+# Utiliser survfit() pour obtenir la courbe de survie de base
+survfit_cox <- survfit(cox_fit)
+
+# Extraire les données de survie
+df_cox <- data.frame(
+  time = survfit_cox$time,
+  surv = survfit_cox$surv
+)
+
+# Ajouter le point initial (temps = 0, survie = 1)
+df_cox <- rbind(data.frame(time = 0, surv = 1), df_cox)
+
+# Tracer la courbe de survie continue
+p_cox <- ggplot(df_cox, aes(x = time, y = surv)) +
+  geom_line(color = "darkblue", linewidth = 1.2) +
+  geom_ribbon(aes(ymin = 0, ymax = surv), alpha = 0.3, fill = "lightblue") +
+  labs(
+    title = "Courbe de survie continue - Modèle de Cox (baseline survival function)",
+    x = "Temps (jours)",
+    y = "Probabilité de survie"
+  ) +
+  theme_bw() +
+  theme(plot.title = element_text(face = "bold", size = 14)) +
+  scale_y_continuous(limits = c(0, 1))
+
+print(p_cox)
+```
+
+### Comparaison Kaplan-Meier vs Modèle de Cox
+
+```{r}
+#| fig-cap: "Comparaison des courbes de survie: Kaplan-Meier vs Modèle de Cox"
+# Tracer les deux courbes ensemble
+# Kaplan-Meier en escalier, Cox en ligne continue
+p_compare <- ggplot() +
+  geom_step(data = df_km, aes(x = time, y = surv, color = "Kaplan-Meier"), 
+            linewidth = 1.2) +
+  geom_line(data = df_cox, aes(x = time, y = surv, color = "Cox"), 
+            linewidth = 1.2) +
+  labs(
+    title = "Comparaison: Kaplan-Meier vs Modèle de Cox",
+    x = "Temps (jours)",
+    y = "Probabilité de survie",
+    color = "Méthode"
+  ) +
+  theme_bw() +
+  theme(plot.title = element_text(face = "bold", size = 14),
+        legend.position = "bottom") +
+  scale_y_continuous(limits = c(0, 1)) +
+  scale_color_manual(values = c("Kaplan-Meier" = "darkred", "Cox" = "darkblue"))
+
+print(p_compare)
+```
