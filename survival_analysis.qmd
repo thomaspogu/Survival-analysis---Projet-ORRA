@@ -277,3 +277,75 @@ p_compare <- ggplot() +
 
 print(p_compare)
 ```
+
+
+
+```{r}
+library(mlr3)
+task = tsk("rats")
+learner = lrn("surv.coxph")
+part = partition(task) # train/test split
+learner$train(task, part$train)
+p = learner$predict(task, part$test)
+
+# Harrell's C-index
+p$score(msr("surv.cindex")) # same as `p$score()`
+
+# Uno's C-index
+p$score(msr("surv.cindex", weight_meth = "SG"), #Must be element of set {'I','G','G2','SG','S','GH'}
+        task = task, train_set = part$train)
+
+# Harrell's C-index evaluated up to a specific time horizon
+p$score(msr("surv.cindex", t_max = 97))
+
+# Harrell's C-index evaluated up to the time corresponding to 30% of censoring
+p$score(msr("surv.cindex", p_max = 0.3))
+
+
+```
+
+
+```{r}
+
+```
+
+```{r}
+library(mlr3)
+
+# Define a survival Task
+task = tsk("lung")
+
+# Create train and test set
+part = partition(task)
+
+# Train Cox learner on the train set
+cox = lrn("surv.coxph")
+cox$train(task, row_ids = part$train)
+
+# Make predictions for the test set
+p = cox$predict(task, row_ids = part$test)
+
+# ISLL, G(t) calculated using the test set
+p$score(msr("surv.intlogloss"))
+
+# ISLL, G(t) calculated using the train set (always recommended)
+p$score(msr("surv.intlogloss"), task = task, train_set = part$train)
+
+# ISLL, ERV score (comparing with KM baseline)
+p$score(msr("surv.intlogloss", ERV = TRUE), task = task, train_set = part$train)
+
+# ISLL at specific time point
+p$score(msr("surv.intlogloss", times = 365), task = task, train_set = part$train)
+
+# ISLL at multiple time points (integrated)
+p$score(msr("surv.intlogloss", times = c(125, 365, 450), integrated = TRUE),
+        task = task, train_set = part$train)
+
+# ISLL, use time cutoff
+p$score(msr("surv.intlogloss", t_max = 700), task = task, train_set = part$train)
+
+# ISLL, use time cutoff corresponding to specific proportion of censoring on the test set
+p$score(msr("surv.intlogloss", p_max = 0.8), task = task, train_set = part$train)
+
+
+```

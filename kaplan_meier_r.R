@@ -2,7 +2,7 @@
 # Utilise le même dataset que k_m_estimator_skicit.ipynb (veterans_lung_cancer)
 
 # Installer les packages si nécessaire:
-# install.packages(c("survival", "mlr3", "mlr3proba", "ggplot2"))
+install.packages(c("survival", "mlr3", "mlr3proba", "ggplot2"))
 
 # Charger les bibliothèques nécessaires
 library(survival)
@@ -99,9 +99,10 @@ p <- ggplot(df_km, aes(x = time, y = surv)) +
   theme(plot.title = element_text(face = "bold", size = 14)) +
   scale_y_continuous(limits = c(0, 1))
 
+
 print(p)
 
-# Afficher des statistiques
+#Afficher des statistiques
 cat("\nStatistiques avec mlr3proba:\n")
 cat("Nombre de points temporels:", length(times_unique), "\n")
 cat("Probabilité de survie initiale:", round(surv_probs[1], 4), "\n")
