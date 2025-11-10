@@ -25,6 +25,7 @@ Ce notebook présente l'estimation de la courbe de survie de Kaplan-Meier en uti
 # install.packages(c("survival", "mlr3", "mlr3proba", "ggplot2", "gridExtra", "glmnet"))
 ```
 
+
 ## Chargement des bibliothèques
 
 ```{r}
@@ -319,10 +320,9 @@ p$score(msr("surv.cindex", p_max = 0.3))
 ```{r}
 library(mlr3)
 
-
+task= TaskSurv$new(id = "veteran_lung", backend = veteran, time = "time", event = "status")
 
 # Define a survival Task
-task = tsk(veteran)
 print(task)
 
 set.seed(42)
@@ -360,3 +360,6 @@ p$score(msr("surv.intlogloss", p_max = 0.8), task = task, train_set = part$train
 
 
 ```
+
+
+
