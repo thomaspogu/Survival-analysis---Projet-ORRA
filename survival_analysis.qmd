@@ -53,6 +53,7 @@ veteran <- survival::veteran
 # Afficher la structure et les premières lignes
 str(veteran)
 head(veteran)
+class(veteran)
 ```
 
 ### Statistiques descriptives
@@ -85,6 +86,7 @@ task_km <- TaskSurv$new(
 
 # Afficher les informations sur la tâche
 print(task_km)
+
 ```
 
 ### Entraînement du modèle Kaplan-Meier
@@ -159,6 +161,7 @@ task_cox <- TaskSurv$new(
 )
 
 # Afficher les informations sur la tâche
+
 print(task_cox)
 ```
 
@@ -284,12 +287,11 @@ print(p_compare)
 library(mlr3)
 library(mlr3proba)
 
-set.seed(42)
-
-task = TaskSurv$new(id = "veteran_lung", backend = veteran, time = "time", event = "status")
+task= TaskSurv$new(id = "veteran_lung", backend = veteran, time = "time", event = "status")
 print(task)
+set.seed(42)
 learner = lrn("surv.coxph")
-part = partition(task,ratio = 0.8) # train/test split
+part = partition(task,ratio=0.8) # train/test split
 learner$train(task, part$train)
 p = learner$predict(task, part$test)
 
@@ -317,11 +319,15 @@ p$score(msr("surv.cindex", p_max = 0.3))
 ```{r}
 library(mlr3)
 
+
+
 # Define a survival Task
-task = TaskSurv$new(id = "veteran_lung", backend = veteran, time = "time", event = "status")
+task = tsk(veteran)
+print(task)
+
 set.seed(42)
 # Create train and test set
-part = partition(task,ratio = 0.8)
+part = partition(task,ratio=0.8)
 
 # Train Cox learner on the train set
 cox = lrn("surv.coxph")
